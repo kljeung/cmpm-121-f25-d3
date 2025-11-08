@@ -20,7 +20,7 @@
 
 - [x] Define a constant for player position (classroom lat/lng).
 
-- [~] Ensure visible map bounds show cells beyond the interactable radius
+- [x] Ensure visible map bounds show cells beyond the interactable radius
 
 ### Grid + cells
 
@@ -30,27 +30,27 @@
 
 - [x] Implement function to convert cell coordinates back to lat/lng bounds.
 
-- [] Use loops to generate a grid of cells covering the visible map region.
+- [x] Use loops to generate a grid of cells covering the visible map region.
 
 ### Token spawning
 
 - [x] Import or implement the provided luck-based hashing function.
 
-- [] For each cell, compute a deterministic seed from its coordinates.
+- [x] For each cell, compute a deterministic seed from its coordinates.
 
 ### Interaction constraints
 
-- [] Implement helper to compute distance (in cells) between player cell and target cell.
+- [x] Implement helper to compute distance (in cells) between player cell and target cell.
 
-- [] Only allow clicking/interacting with cells within ~3 cells of player.
+- [x] Only allow clicking/interacting with cells within ~3 cells of player.
 
-- [] Provide visual feedback for interactable vs non-interactable cells
+- [x] Provide visual feedback for interactable vs non-interactable cells
 
 ### Inventory (single token)
 
-- [] Add a simple on-screen HUD showing whether the player is holding a token and its value.
+- [x] Add a simple on-screen HUD showing whether the player is holding a token and its value.
 
-- [] When clicking an interactable cell with a token and empty hand:
+- [x] When clicking an interactable cell with a token and empty hand:
 
       - Pick up that token (store value in inventory).
 
@@ -62,7 +62,7 @@
 
 ### Crafting
 
-- [] When clicking an interactable cell that contains a token with the same value as held token:
+- [x] When clicking an interactable cell that contains a token with the same value as held token:
 
       - Remove token from cell.
 
@@ -76,6 +76,6 @@
 
 - [x] Choose target token value
 
-- [] Detect when any cell reaches target value
+- [x] Detect when any cell reaches target value
 
-- [] Display clear “success” message on screen
+- [x] Display clear “success” message on screen
