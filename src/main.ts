@@ -21,6 +21,8 @@ const statusPanelDiv = document.createElement("div");
 statusPanelDiv.id = "statusPanel";
 document.body.append(statusPanelDiv);
 
+const GRID_ANCHOR = leaflet.latLng(0, 0);
+
 // const definitions
 const CLASSROOM_LATLNG = leaflet.latLng(
   36.997936938057016,
@@ -32,45 +34,113 @@ const TILE_DEGREES = 1e-4;
 const INTERACT_RADIUS = 3;
 const GRID_MARGIN = 5;
 const TOKEN_SPAWN_PROBABILITY = 0.5;
-const TARGET_TOKEN_VALUE = 32;
+const TARGET_TOKEN_VALUE = 128;
 
 // map and tiles
 const map = leaflet.map(mapDiv, {
   center: CLASSROOM_LATLNG,
   zoom: GAMEPLAY_ZOOM_LEVEL,
-  minZoom: GAMEPLAY_ZOOM_LEVEL,
-  maxZoom: GAMEPLAY_ZOOM_LEVEL,
-  zoomControl: false,
-  scrollWheelZoom: false,
+  minZoom: 17,
+  maxZoom: 21,
+  zoomControl: true,
+  scrollWheelZoom: true,
 });
 
 leaflet
   .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
+    maxZoom: 21,
     attribution:
       '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   })
   .addTo(map);
 
 // player bounds
-const PLAYER_LATLNG = CLASSROOM_LATLNG;
+let PLAYER_LATLNG = CLASSROOM_LATLNG;
 const playerMarker = leaflet.marker(PLAYER_LATLNG);
-playerMarker.bindTooltip("YOU ARE HERE");
+playerMarker.bindTooltip("YOU ARE HERE", { permanent: true, direction: "top" });
 playerMarker.addTo(map);
+
+let interactRing: leaflet.Rectangle | null = null;
+
+function _updateInteractRing() {
+  const pCell = latLngToCell(PLAYER_LATLNG);
+  const south = GRID_ANCHOR.lat + (pCell.i - INTERACT_RADIUS) * TILE_DEGREES;
+  const west = GRID_ANCHOR.lng + (pCell.j - INTERACT_RADIUS) * TILE_DEGREES;
+  const north = GRID_ANCHOR.lat +
+    (pCell.i + INTERACT_RADIUS + 1) * TILE_DEGREES;
+  const east = GRID_ANCHOR.lng + (pCell.j + INTERACT_RADIUS + 1) * TILE_DEGREES;
+  const bounds = leaflet.latLngBounds([[south, west], [north, east]]);
+  if (!interactRing) {
+    interactRing = leaflet.rectangle(bounds, {
+      color: "#ffff00aa",
+      weight: 1.5,
+      fill: false,
+    }).addTo(map);
+  } else {
+    interactRing.setBounds(bounds);
+  }
+}
+
+// ui buttons for movement + actual implementation
+controlPanelDiv.innerHTML = `
+  <div class="controls">
+    <button id="btnN">North</button>
+    <button id="btnS">South</button>
+    <button id="btnW">West</button>
+    <button id="btnE">East</button>
+    <button id="btnCenter">Center on Player</button>
+  </div>
+`;
+
+function movePlayer(di: number, dj: number) {
+  const pCell = latLngToCell(PLAYER_LATLNG);
+  const ni = pCell.i + di;
+  const nj = pCell.j + dj;
+  const center = cellCenterLatLng(ni, nj);
+  PLAYER_LATLNG = center;
+  playerMarker.setLatLng(PLAYER_LATLNG);
+  _updateInteractRing();
+  for (const c of cells.values()) _styleCell(c);
+  _updateHUD("Moved.");
+  _checkWinCondition();
+}
+(document.getElementById("btnN") as HTMLButtonElement).onclick = () =>
+  movePlayer(1, 0);
+(document.getElementById("btnS") as HTMLButtonElement).onclick = () =>
+  movePlayer(-1, 0);
+(document.getElementById("btnW") as HTMLButtonElement).onclick = () =>
+  movePlayer(0, -1);
+(document.getElementById("btnE") as HTMLButtonElement).onclick = () =>
+  movePlayer(0, 1);
+(document.getElementById("btnCenter") as HTMLButtonElement).onclick = () =>
+  map.panTo(PLAYER_LATLNG);
 
 // lat/lng to cell coords
 function latLngToCell(latlng: leaflet.LatLng) {
-  const i = Math.floor((latlng.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
-  const j = Math.floor((latlng.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
+  const i = Math.floor((latlng.lat - GRID_ANCHOR.lat) / TILE_DEGREES);
+  const j = Math.floor((latlng.lng - GRID_ANCHOR.lng) / TILE_DEGREES);
   return { i, j };
 }
 
+function cellTopLeft(i: number, j: number): leaflet.LatLng {
+  return leaflet.latLng(
+    GRID_ANCHOR.lat + i * TILE_DEGREES,
+    GRID_ANCHOR.lng + j * TILE_DEGREES,
+  );
+}
+
 function _cellToBounds(i: number, j: number): leaflet.LatLngBounds {
-  const south = CLASSROOM_LATLNG.lat + i - TILE_DEGREES;
-  const west = CLASSROOM_LATLNG.lng + j - TILE_DEGREES;
-  const north = south + TILE_DEGREES;
-  const east = west + TILE_DEGREES;
-  return leaflet.latLngBounds([[south, west], [north, east]]);
+  const tl = cellTopLeft(i, j);
+  const br = leaflet.latLng(
+    tl.lat + TILE_DEGREES,
+    tl.lng + TILE_DEGREES,
+  );
+  return leaflet.latLngBounds([tl, br]);
+}
+
+function cellCenterLatLng(i: number, j: number): leaflet.LatLng {
+  const b = _cellToBounds(i, j);
+  return b.getCenter();
 }
 
 // grid and cells
@@ -85,20 +155,18 @@ interface cellData {
 
 const cells = new Map<cellKey, cellData>();
 
-function cellKey(i: number, j: number): cellKey {
-  return `${i}, ${j}`;
+function makeCellKey(i: number, j: number): cellKey {
+  return `${i},${j}`;
 }
 
 // deterministic token value
 function _generateTokenValue(i: number, j: number): number | null {
   const spawnRoll = _luck(`${i},${j},spawn`);
-  if (spawnRoll >= TOKEN_SPAWN_PROBABILITY) {
-    return null;
-  }
+  if (spawnRoll >= TOKEN_SPAWN_PROBABILITY) return null;
 
   const valueRoll = _luck(`${i},${j},value`);
   const options = [1, 2, 4];
-  const index = Math.floor(valueRoll - options.length) % options.length;
+  const index = Math.floor(valueRoll * options.length) % options.length;
   return options[index];
 }
 
@@ -114,17 +182,39 @@ function createCell(i: number, j: number) {
   }).addTo(map);
 
   const data: cellData = { i, j, rect, tokenValue };
-  const key = cellKey(i, j);
+  const key = makeCellKey(i, j);
   cells.set(key, data);
 
   _styleCell(data);
 
-  rect.on("click", () => {
-    handleCellClick(data);
-  });
+  rect.on("click", () => handleCellClick(data));
 }
 
-//fill grid
+// despawn cells that are offscreen (for farming purposes)
+function pruneGrid() {
+  const bounds = map.getBounds();
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+  const minCell = latLngToCell(sw);
+  const maxCell = latLngToCell(ne);
+
+  const iMin = minCell.i - GRID_MARGIN;
+  const iMax = maxCell.i + GRID_MARGIN;
+  const jMin = minCell.j - GRID_MARGIN;
+  const jMax = maxCell.j + GRID_MARGIN;
+
+  for (const [key, cell] of cells.entries()) {
+    if (
+      cell.i < iMin || cell.i > iMax ||
+      cell.j < jMin || cell.j > jMax
+    ) {
+      cell.rect.remove();
+      cells.delete(key);
+    }
+  }
+}
+
+// fill grid
 function computeGrid() {
   const bounds = map.getBounds();
   const sw = bounds.getSouthWest();
@@ -135,12 +225,13 @@ function computeGrid() {
 
   for (let i = minCell.i - GRID_MARGIN; i <= maxCell.i + GRID_MARGIN; i++) {
     for (let j = minCell.j - GRID_MARGIN; j <= maxCell.j + GRID_MARGIN; j++) {
-      const key = cellKey(i, j);
-      if (!cells.has(key)) {
-        createCell(i, j);
-      }
+      const key = makeCellKey(i, j);
+      if (!cells.has(key)) createCell(i, j);
     }
   }
+
+  pruneGrid();
+  _updateInteractRing();
 }
 
 // interaction constraints
@@ -159,30 +250,33 @@ function _isInteractable(cell: cellData): boolean {
 function _styleCell(cell: cellData) {
   const interactable = _isInteractable(cell);
   const hasToken = cell.tokenValue !== null;
+  const p = latLngToCell(PLAYER_LATLNG);
+  const isPlayerCell = cell.i === p.i && cell.j === p.j;
+
   let fillColor = "#00000000";
-  if (hasToken && interactable) {
-    fillColor = "#b8860bcc";
-  } else if (hasToken && !interactable) {
-    fillColor = "#3355bb55";
-  } else if (!hasToken && interactable) {
-    fillColor = "#11662266";
-  }
+  if (hasToken && interactable) fillColor = "#b8860bcc";
+  else if (hasToken && !interactable) fillColor = "#3355bb55";
+  else if (!hasToken && interactable) fillColor = "#11662266";
 
   cell.rect.setStyle({
     fill: true,
     fillColor,
-    color: interactable ? "#ffffffaa" : "#44444466",
-    weight: interactable ? 1.5 : 1,
+    color: isPlayerCell
+      ? "#ffea00"
+      : (interactable ? "#ffffffaa" : "#44444466"),
+    weight: isPlayerCell ? 2.5 : (interactable ? 1.5 : 1),
+    dashArray: isPlayerCell ? "4 2" : undefined,
   });
-
+  cell.rect.unbindTooltip();
   if (hasToken) {
-    const labelPrefix = interactable ? "Token" : "Token (out of reach)";
-    cell.rect.bindTooltip(
-      `${labelPrefix}: [${cell.tokenValue}]`,
-      { sticky: true },
-    );
-  } else {
-    cell.rect.unbindTooltip();
+    const labelPrefix = interactable ? "" : "out ";
+    cell.rect.bindTooltip(`${labelPrefix}[${cell.tokenValue}]`, {
+      permanent: false,
+      sticky: true,
+      direction: "auto",
+      className: "cellHover",
+      opacity: 1,
+    });
   }
 }
 
@@ -215,7 +309,7 @@ function handleCellClick(cell: cellData) {
     return;
   }
   if (hasToken && heldToken !== null && cell.tokenValue === heldToken) {
-    const newValue = heldToken - 2;
+    const newValue = heldToken * 2;
     heldToken = null;
     cell.tokenValue = newValue;
     _styleCell(cell);
@@ -223,7 +317,6 @@ function handleCellClick(cell: cellData) {
     _checkWinCondition();
     return;
   }
-
   if (hasToken && heldToken !== null && cell.tokenValue !== heldToken) {
     _updateHUD(
       `Cannot craft that, buddy. Cell has [${cell.tokenValue}] but you're holding [${heldToken}]. Do you happen to have a third hand?`,
@@ -237,7 +330,6 @@ function handleCellClick(cell: cellData) {
     );
     return;
   }
-
   _updateHUD("Nothing to do here.");
 }
 
@@ -257,5 +349,6 @@ function _checkWinCondition() {
     }
   }
 }
-computeGrid();
 map.on("moveend", computeGrid);
+computeGrid();
+_updateInteractRing();

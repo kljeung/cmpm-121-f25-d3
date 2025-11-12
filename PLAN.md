@@ -86,34 +86,34 @@
 
 ### Map + scrolling
 
-- [] Add zooming and moving the camera.
+- [x] Add zooming and moving the camera.
 
-- [] Add a player marker independent of map center.
+- [x] Add a player marker independent of map center.
 
-  - [] Render marker; update only on player movement (not on map pan).
+  - [x] Render marker; update only on player movement (not on map pan).
 
-- [] Allow mapscrolling without moving the player (pan to scout).
+- [x] Allow mapscrolling without moving the player (pan to scout).
 
-- [] Fill viewport with cells.
+- [x] Fill viewport with cells.
 
-- [] Change global coords to (0,0).
+- [x] Change global coords to (0,0).
 
 ### UI controls
 
-- [] Add fixed UI buttons: `North`, `South`, `East`, `West`
+- [x] Add fixed UI buttons: `North`, `South`, `East`, `West`
 
 ### Crafting + win condition
 
-- [] Add HUD line and progress feedback.
+- [x] Add HUD line and progress feedback.
 
-- [] Show clear “Victory” when any crafted token meets/exceeds target.
+- [x] Show clear “Victory” when any crafted token meets/exceeds target.
 
 ### Rendering polish
 
-- [] Draw token glyph/value in cell.
+- [x] Draw token glyph/value in cell.
 
-- [] Highlight player cell and interaction ring.
+- [x] Highlight player cell and interaction ring.
 
 ## Acceptance criteria
 
-- [] Implementing farming (enable memoryless behavior).
+- [x] Implementing farming (enable memoryless behavior).
