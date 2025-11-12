@@ -68,14 +68,52 @@
 
       - Replace with a token of double value.
 
-      - Clear or update player inventory
+      - Clear or update player inventory.
 
       - Refresh HUD and cell display after crafting.
 
 ### Win condition / feedback
 
-- [x] Choose target token value
+- [x] Choose target token value.
 
-- [x] Detect when any cell reaches target value
+- [x] Detect when any cell reaches target value.
 
-- [x] Display clear “success” message on screen
+- [x] Display clear “success” message on screen.
+
+# D3.b: Globe-spanning Gameplay
+
+## Steps
+
+### Map + scrolling
+
+- [] Add zooming and moving the camera.
+
+- [] Add a player marker independent of map center.
+
+  - [] Render marker; update only on player movement (not on map pan).
+
+- [] Allow mapscrolling without moving the player (pan to scout).
+
+- [] Fill viewport with cells.
+
+- [] Change global coords to (0,0).
+
+### UI controls
+
+- [] Add fixed UI buttons: `North`, `South`, `East`, `West`
+
+### Crafting + win condition
+
+- [] Add HUD line and progress feedback.
+
+- [] Show clear “Victory” when any crafted token meets/exceeds target.
+
+### Rendering polish
+
+- [] Draw token glyph/value in cell.
+
+- [] Highlight player cell and interaction ring.
+
+## Acceptance criteria
+
+- [] Implementing farming (enable memoryless behavior).

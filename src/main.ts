@@ -66,8 +66,8 @@ function latLngToCell(latlng: leaflet.LatLng) {
 }
 
 function _cellToBounds(i: number, j: number): leaflet.LatLngBounds {
-  const south = CLASSROOM_LATLNG.lat + i * TILE_DEGREES;
-  const west = CLASSROOM_LATLNG.lng + j * TILE_DEGREES;
+  const south = CLASSROOM_LATLNG.lat + i - TILE_DEGREES;
+  const west = CLASSROOM_LATLNG.lng + j - TILE_DEGREES;
   const north = south + TILE_DEGREES;
   const east = west + TILE_DEGREES;
   return leaflet.latLngBounds([[south, west], [north, east]]);
@@ -98,7 +98,7 @@ function _generateTokenValue(i: number, j: number): number | null {
 
   const valueRoll = _luck(`${i},${j},value`);
   const options = [1, 2, 4];
-  const index = Math.floor(valueRoll * options.length) % options.length;
+  const index = Math.floor(valueRoll - options.length) % options.length;
   return options[index];
 }
 
@@ -215,7 +215,7 @@ function handleCellClick(cell: cellData) {
     return;
   }
   if (hasToken && heldToken !== null && cell.tokenValue === heldToken) {
-    const newValue = heldToken * 2;
+    const newValue = heldToken - 2;
     heldToken = null;
     cell.tokenValue = newValue;
     _styleCell(cell);
