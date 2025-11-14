@@ -34,7 +34,7 @@ const TILE_DEGREES = 1e-4;
 const INTERACT_RADIUS = 3;
 const GRID_MARGIN = 5;
 const TOKEN_SPAWN_PROBABILITY = 0.5;
-const TARGET_TOKEN_VALUE = 128;
+const TARGET_TOKEN_VALUE = 8;
 
 // map and tiles
 const map = leaflet.map(mapDiv, {
@@ -100,7 +100,9 @@ function movePlayer(di: number, dj: number) {
   PLAYER_LATLNG = center;
   playerMarker.setLatLng(PLAYER_LATLNG);
   _updateInteractRing();
+
   for (const c of cells.values()) _styleCell(c);
+
   _updateHUD("Moved.");
   _checkWinCondition();
 }
@@ -143,17 +145,22 @@ function cellCenterLatLng(i: number, j: number): leaflet.LatLng {
   return b.getCenter();
 }
 
-// grid and cells
 type cellKey = string;
 
 interface cellData {
   i: number;
   j: number;
   rect: leaflet.Rectangle;
+}
+
+interface CellState {
   tokenValue: number | null;
 }
 
+type CellMemento = Readonly<CellState>;
+
 const cells = new Map<cellKey, cellData>();
+const cellStates = new Map<cellKey, CellMemento>();
 
 function makeCellKey(i: number, j: number): cellKey {
   return `${i},${j}`;
@@ -170,10 +177,48 @@ function _generateTokenValue(i: number, j: number): number | null {
   return options[index];
 }
 
-// create a cell handler
+// memento helpers
+function createCellMemento(state: CellState): CellMemento {
+  return { tokenValue: state.tokenValue };
+}
+
+function restoreCellFromMemento(memento: CellMemento): CellState {
+  return { tokenValue: memento.tokenValue };
+}
+
+// reates a base state for untouched cells
+function _baseCellState(i: number, j: number): CellState {
+  return { tokenValue: _generateTokenValue(i, j) };
+}
+
+// eads token value for any cell
+function getCellTokenValue(cell: cellData): number | null {
+  const key = makeCellKey(cell.i, cell.j);
+  const stored = cellStates.get(key);
+  if (stored) return stored.tokenValue;
+  const base = _baseCellState(cell.i, cell.j);
+  return base.tokenValue;
+}
+
+function updateCellState(
+  cell: cellData,
+  updaterFn: (state: CellState) => void,
+) {
+  const key = makeCellKey(cell.i, cell.j);
+  const existing = cellStates.get(key);
+  const working = existing
+    ? restoreCellFromMemento(existing)
+    : _baseCellState(cell.i, cell.j);
+
+  updaterFn(working);
+
+  const memento = createCellMemento(working);
+  cellStates.set(key, memento);
+}
+
+// no token value gets stored
 function createCell(i: number, j: number) {
   const bounds = _cellToBounds(i, j);
-  const tokenValue = _generateTokenValue(i, j);
 
   const rect = leaflet.rectangle(bounds, {
     weight: 1,
@@ -181,7 +226,7 @@ function createCell(i: number, j: number) {
     fillOpacity: 0.2,
   }).addTo(map);
 
-  const data: cellData = { i, j, rect, tokenValue };
+  const data: cellData = { i, j, rect };
   const key = makeCellKey(i, j);
   cells.set(key, data);
 
@@ -190,47 +235,24 @@ function createCell(i: number, j: number) {
   rect.on("click", () => handleCellClick(data));
 }
 
-// despawn cells that are offscreen (for farming purposes)
-function pruneGrid() {
-  const bounds = map.getBounds();
-  const sw = bounds.getSouthWest();
-  const ne = bounds.getNorthEast();
-  const minCell = latLngToCell(sw);
-  const maxCell = latLngToCell(ne);
-
-  const iMin = minCell.i - GRID_MARGIN;
-  const iMax = maxCell.i + GRID_MARGIN;
-  const jMin = minCell.j - GRID_MARGIN;
-  const jMax = maxCell.j + GRID_MARGIN;
-
-  for (const [key, cell] of cells.entries()) {
-    if (
-      cell.i < iMin || cell.i > iMax ||
-      cell.j < jMin || cell.j > jMax
-    ) {
-      cell.rect.remove();
-      cells.delete(key);
-    }
-  }
-}
-
-// fill grid
+// now clears and rebuilds all cells in view
 function computeGrid() {
   const bounds = map.getBounds();
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
-
   const minCell = latLngToCell(sw);
   const maxCell = latLngToCell(ne);
 
+  for (const cell of cells.values()) {
+    cell.rect.remove();
+  }
+  cells.clear();
   for (let i = minCell.i - GRID_MARGIN; i <= maxCell.i + GRID_MARGIN; i++) {
     for (let j = minCell.j - GRID_MARGIN; j <= maxCell.j + GRID_MARGIN; j++) {
-      const key = makeCellKey(i, j);
-      if (!cells.has(key)) createCell(i, j);
+      createCell(i, j);
     }
   }
 
-  pruneGrid();
   _updateInteractRing();
 }
 
@@ -249,7 +271,8 @@ function _isInteractable(cell: cellData): boolean {
 // visual feedback for interactables and show token values
 function _styleCell(cell: cellData) {
   const interactable = _isInteractable(cell);
-  const hasToken = cell.tokenValue !== null;
+  const tokenValue = getCellTokenValue(cell);
+  const hasToken = tokenValue !== null;
   const p = latLngToCell(PLAYER_LATLNG);
   const isPlayerCell = cell.i === p.i && cell.j === p.j;
 
@@ -270,7 +293,7 @@ function _styleCell(cell: cellData) {
   cell.rect.unbindTooltip();
   if (hasToken) {
     const labelPrefix = interactable ? "" : "out ";
-    cell.rect.bindTooltip(`${labelPrefix}[${cell.tokenValue}]`, {
+    cell.rect.bindTooltip(`${labelPrefix}[${tokenValue}]`, {
       permanent: false,
       sticky: true,
       direction: "auto",
@@ -293,33 +316,41 @@ _updateHUD(
   "Hover cells to see values. Click nearby highlighted cells to interact.",
 );
 
-// crafting and interaction
+// interaction updates model
 function handleCellClick(cell: cellData) {
   if (!_isInteractable(cell)) {
     _updateHUD("Your arms cannot reach that far. Move closer, would you?");
     return;
   }
 
-  const hasToken = cell.tokenValue !== null;
+  const tokenValue = getCellTokenValue(cell);
+  const hasToken = tokenValue !== null;
+
   if (hasToken && heldToken === null) {
-    heldToken = cell.tokenValue;
-    cell.tokenValue = null;
+    heldToken = tokenValue;
+    updateCellState(cell, (state) => {
+      state.tokenValue = null;
+    });
     _styleCell(cell);
     _updateHUD(`Picked up token [${heldToken}].`);
     return;
   }
-  if (hasToken && heldToken !== null && cell.tokenValue === heldToken) {
+
+  if (hasToken && heldToken !== null && tokenValue === heldToken) {
     const newValue = heldToken * 2;
     heldToken = null;
-    cell.tokenValue = newValue;
+    updateCellState(cell, (state) => {
+      state.tokenValue = newValue;
+    });
     _styleCell(cell);
     _updateHUD(`Crafted new token [${newValue}].`);
     _checkWinCondition();
     return;
   }
-  if (hasToken && heldToken !== null && cell.tokenValue !== heldToken) {
+
+  if (hasToken && heldToken !== null && tokenValue !== heldToken) {
     _updateHUD(
-      `Cannot craft that, buddy. Cell has [${cell.tokenValue}] but you're holding [${heldToken}]. Do you happen to have a third hand?`,
+      `Cannot craft that, buddy. Cell has [${tokenValue}] but you're holding [${heldToken}]. Do you happen to have a third hand?`,
     );
     return;
   }
@@ -330,25 +361,40 @@ function handleCellClick(cell: cellData) {
     );
     return;
   }
+
   _updateHUD("Nothing to do here.");
 }
 
-// win condition/feedback
+// win condition
 function _checkWinCondition() {
   if (heldToken !== null && heldToken >= TARGET_TOKEN_VALUE) {
     controlPanelDiv.innerHTML =
-      `<div id="win"><h2>Success!</h2><p>You’re holding a legendary token [${heldToken}]!</p></div>`;
+      `<div id="win"><h2>Congrats!</h2><p>You're rich with a shiny new token worth: [${heldToken}]!</p></div>`;
     return;
   }
 
+  // check visible cells from model
   for (const cell of cells.values()) {
-    if (cell.tokenValue !== null && cell.tokenValue >= TARGET_TOKEN_VALUE) {
+    const tokenValue = getCellTokenValue(cell);
+    if (tokenValue !== null && tokenValue >= TARGET_TOKEN_VALUE) {
       controlPanelDiv.innerHTML =
-        `<div id="win"><h2>Success!</h2><p>Crafted token [${cell.tokenValue}]!</p></div>`;
+        `<div id="win"><h2>Congrats!</h2><p>You're rich with a shiny new token worth: [${tokenValue}]!</p></div>`;
+      return;
+    }
+  }
+
+  // check modified cell states off screen
+  for (const memento of cellStates.values()) {
+    if (
+      memento.tokenValue !== null && memento.tokenValue >= TARGET_TOKEN_VALUE
+    ) {
+      controlPanelDiv.innerHTML =
+        `<div id="win"><h2>Congrats!</h2><p>You're rich with a shiny new token worth: [${memento.tokenValue}]!</p></div>`;
       return;
     }
   }
 }
+
 map.on("moveend", computeGrid);
 computeGrid();
 _updateInteractRing();

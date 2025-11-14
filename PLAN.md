@@ -124,54 +124,54 @@
 
 ### Flyweight cells
 
-- [ ] Remove / avoid any data structure that stores every cell in memory at once.
+- [x] Remove / avoid any data structure that stores every cell in memory at once.
 
-- [ ] Introduce a `Map<string, CellState>` that only stores modified cells.
+- [x] Introduce a `Map<string, CellState>` that only stores modified cells.
 
-- [ ] Update cell rendering so visible cells are rebuilt each frame:
+- [x] Update cell rendering so visible cells are rebuilt each frame:
 
-  - [ ] Convert viewport lat/lng → cell coords.
+  - [x] Convert viewport lat/lng → cell coords.
 
-  - [ ] For each visible cell:
+  - [x] For each visible cell:
 
-    - [ ] Compute deterministic default token using luck hash from `(i, j)`.
+    - [x] Compute deterministic default token using luck hash from `(i, j)`.
 
-    - [ ] If `Map` has an entry for this cell, use that stored `CellState` instead.
+    - [x] If `Map` has an entry for this cell, use that stored `CellState` instead.
 
 ### Memento pattern for modified cells
 
-- [ ] Define `createCellMemento(cellState: CellState)`
+- [x] Define `createCellMemento(cellState: CellState)`
 
-- [ ] Wrap all gameplay changes in helpers:
+- [x] Wrap all gameplay changes in helpers:
 
-  - [ ] `updateCellState(coord, updaterFn)` that:
+  - [x] `updateCellState(coord, updaterFn)` that:
 
-    - [ ] Looks up or constructs the current `CellState`.
+    - [x] Looks up or constructs the current `CellState`.
 
-    - [ ] Applies the change.
+    - [x] Applies the change.
 
-    - [ ] Stores the new state back into the `Map`.
+    - [x] Stores the new state back into the `Map`.
 
 ### Integrated with existing code
 
-- [ ] Replace any code that directly mutates cell objects with `updateCellState`.
+- [x] Replace any code that directly mutates cell objects with `updateCellState`.
 
-- [ ] When a cell is emptied (token picked up), ensure its `CellState` in the `Map` reflects this change.
+- [x] When a cell is emptied (token picked up), ensure its `CellState` in the `Map` reflects this change.
 
-- [ ] When crafting doubles a token:
+- [x] When crafting doubles a token:
 
-  - [ ] Read existing `CellState`, double its value, and write back via `updateCellState`.
+  - [x] Read existing `CellState`, double its value, and write back via `updateCellState`.
 
-- [ ] Ensure HUD and cell visuals always read from `CellState`, not from stale view objects.
+- [x] Ensure HUD and cell visuals always read from `CellState`, not from stale view objects.
 
 ### Rendering / redraw loop
 
-- [ ] Refactor drawing so that panning/zooming always:
+- [x] Refactor drawing so that panning/zooming always:
 
-  - [ ] Clears all existing cell layers from the map.
+  - [x] Clears all existing cell layers from the map.
 
-  - [ ] Recomputes visible cell coords.
+  - [x] Recomputes visible cell coords.
 
-  - [ ] Rebuilds cell rectangles and tokens.
+  - [x] Rebuilds cell rectangles and tokens.
 
-- [ ] Confirm no attempt is made to keep old Leaflet layers when they scroll off-screen.
+- [x] Confirm no attempt is made to keep old Leaflet layers when they scroll off-screen.
