@@ -175,3 +175,71 @@
   - [x] Rebuilds cell rectangles and tokens.
 
 - [x] Confirm no attempt is made to keep old Leaflet layers when they scroll off-screen.
+
+# D3.d: Gameplay Across Real-world Space and Time
+
+## Steps
+
+### Movement
+
+- [] Player movement can be controlled via buttons or device geolocation, selected by query string or runtime toggle.
+
+- [] All game logic that reacts to player movement uses the `MovementController` interface
+
+  - [] Call a shared `setPlayerPosition` / `movePlayerByCells` helper instead of using player state directly.
+
+  - [] On position update, compute movement relative to initial fix and call shared movement helpers.
+
+- [] Ensure core game code only responds to movement callbacks.
+
+### Geolocation behavior
+
+- [] Map real world motion to grid cells.
+
+### Movement mode switching
+
+- [] Create UI that allows user to switch modes at the beginning of the game.
+
+- [] When mode changes, update HUD text so player knows which control scheme is active.
+
+- [] Persist the currently selected movement mode in storage so it’s restored on reload.
+
+- [] If geolocation is unavailable or denied, the game clearly indicates this and remains playable.
+
+### Game state persistence
+
+- [] Implement game states:
+
+  - [] Player position (lat/lng or cell coordinates).
+
+  - [] Player inventory.
+
+  - [] Modified cells.
+
+  - [] Current movement mode (buttons / geolocation).
+
+  - [] Any other necessary flags or progress.
+
+- [] Implement saving game state:
+
+  - [] Call after important events automatically: player move, token pickup, crafting, mode switch, new game.
+
+- [] Make sure save/load only persists logical game state, not Leaflet layer objects.
+
+### New game flow
+
+- [] Add a “New Game” button to the control panel.
+
+- [] When clicked:
+
+  - [] Show confirmation dialog.
+
+  - [] Clear the storage key for game state.
+
+  - [] Clears previous progress and starts from a clean state.
+
+  - [] Reset movement controller.
+
+  - [] Re-render HUD, player marker, and visible grid.
+
+- [] After starting a new game, call `saveGameState()` immediately to establish the new baseline.
