@@ -1,12 +1,200 @@
-#controlPanel {
-  padding: 1rem;
-}
-
-#statusPanel {
-  padding: 1rem;
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 #map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+#controlPanel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+#controlPanelInner {
+  pointer-events: auto;
+  min-width: 260px;
+  max-width: 320px;
+  background: rgba(18, 18, 18, 0.92);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  color: #f7f7f7;
+  font-family:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cp-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.cp-section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.cp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.cp-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+.cp-button-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, auto);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+#btnN {
+  grid-column: 2 / 3;
+  grid-row: 1 / 2;
+}
+
+#btnW {
+  grid-column: 1 / 2;
+  grid-row: 2 / 3;
+}
+
+#btnE {
+  grid-column: 3 / 4;
+  grid-row: 2 / 3;
+}
+
+#btnS {
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+}
+
+.cp-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: #2b2b2b;
+  color: #f5f5f5;
+  transition:
+    background 0.15s ease,
+    transform 0.05s ease,
+    box-shadow 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.cp-btn-main {
+  background: #e181f0;
+}
+
+.cp-btn-secondary {
   width: 100%;
-  height: 80vh;
+  margin-top: 2px;
+  background: #353535;
+}
+
+.cp-btn-danger {
+  width: 100%;
+  margin-top: 4px;
+  background: #f19655;
+}
+
+.cp-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.cp-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.cp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.cp-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.cp-select {
+  flex: 1;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(24, 24, 24, 0.9);
+  color: #f5f5f5;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.cp-win {
+  margin-top: 4px;
+}
+
+.cp-win-inner {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 215, 0, 0.14),
+    rgba(255, 255, 255, 0.05)
+  );
+  border: 1px solid rgba(255, 215, 0, 0.35);
+}
+
+.cp-win-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+
+.cp-win-text {
+  font-size: 13px;
+  margin: 0;
+}
+
+#statusPanel {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  max-width: 380px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(15, 15, 15, 0.9);
+  color: #f5f5f5;
+  font-family:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
 }
