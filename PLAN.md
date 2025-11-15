@@ -182,64 +182,64 @@
 
 ### Movement
 
-- [] Player movement can be controlled via buttons or device geolocation, selected by query string or runtime toggle.
+- [x] Player movement can be controlled via buttons or device geolocation, selected by query string or runtime toggle.
 
-- [] All game logic that reacts to player movement uses the `MovementController` interface
+- [x] All game logic that reacts to player movement uses the `MovementController` interface
 
-  - [] Call a shared `setPlayerPosition` / `movePlayerByCells` helper instead of using player state directly.
+  - [x] Call a shared `setPlayerPosition` / `movePlayerByCells` helper instead of using player state directly.
 
-  - [] On position update, compute movement relative to initial fix and call shared movement helpers.
+  - [x] On position update, compute movement relative to initial fix and call shared movement helpers.
 
-- [] Ensure core game code only responds to movement callbacks.
+- [x] Ensure core game code only responds to movement callbacks.
 
 ### Geolocation behavior
 
-- [] Map real world motion to grid cells.
+- [x] Map real world motion to grid cells.
 
 ### Movement mode switching
 
-- [] Create UI that allows user to switch modes at the beginning of the game.
+- [x] Create UI that allows user to switch modes at the beginning of the game.
 
-- [] When mode changes, update HUD text so player knows which control scheme is active.
+- [x] When mode changes, update HUD text so player knows which control scheme is active.
 
-- [] Persist the currently selected movement mode in storage so it’s restored on reload.
+- [x] Persist the currently selected movement mode in storage so it’s restored on reload.
 
-- [] If geolocation is unavailable or denied, the game clearly indicates this and remains playable.
+- [x] If geolocation is unavailable or denied, the game clearly indicates this and remains playable.
 
 ### Game state persistence
 
-- [] Implement game states:
+- [x] Implement game states:
 
-  - [] Player position (lat/lng or cell coordinates).
+  - [x] Player position (lat/lng or cell coordinates).
 
-  - [] Player inventory.
+  - [x] Player inventory.
 
-  - [] Modified cells.
+  - [x] Modified cells.
 
-  - [] Current movement mode (buttons / geolocation).
+  - [x] Current movement mode (buttons / geolocation).
 
-  - [] Any other necessary flags or progress.
+  - [x] Any other necessary flags or progress.
 
-- [] Implement saving game state:
+- [x] Implement saving game state:
 
-  - [] Call after important events automatically: player move, token pickup, crafting, mode switch, new game.
+  - [x] Call after important events automatically: player move, token pickup, crafting, mode switch, new game.
 
-- [] Make sure save/load only persists logical game state, not Leaflet layer objects.
+- [x] Make sure save/load only persists logical game state, not Leaflet layer objects.
 
 ### New game flow
 
-- [] Add a “New Game” button to the control panel.
+- [x] Add a “New Game” button to the control panel.
 
-- [] When clicked:
+- [x] When clicked:
 
-  - [] Show confirmation dialog.
+  - [x] Show confirmation dialog.
 
-  - [] Clear the storage key for game state.
+  - [x] Clear the storage key for game state.
 
-  - [] Clears previous progress and starts from a clean state.
+  - [x] Clears previous progress and starts from a clean state.
 
-  - [] Reset movement controller.
+  - [x] Reset movement controller.
 
-  - [] Re-render HUD, player marker, and visible grid.
+  - [x] Re-render HUD, player marker, and visible grid.
 
-- [] After starting a new game, call `saveGameState()` immediately to establish the new baseline.
+- [x] After starting a new game, call `saveGameState()` immediately to establish the new baseline.

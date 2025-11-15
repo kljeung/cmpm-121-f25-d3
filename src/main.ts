@@ -21,9 +21,47 @@ const statusPanelDiv = document.createElement("div");
 statusPanelDiv.id = "statusPanel";
 document.body.append(statusPanelDiv);
 
-const GRID_ANCHOR = leaflet.latLng(0, 0);
+// updated UI
+controlPanelDiv.innerHTML = `
+  <div id="controlPanelInner">
+    <div class="cp-section">
+      <div class="cp-header">
+        <h2 class="cp-title">Movement</h2>
+      </div>
+      <div class="cp-button-grid">
+        <button id="btnN" class="cp-btn cp-btn-main">N</button>
+        <button id="btnW" class="cp-btn cp-btn-main">W</button>
+        <button id="btnE" class="cp-btn cp-btn-main">E</button>
+        <button id="btnS" class="cp-btn cp-btn-main">S</button>
+      </div>
+      <button id="btnCenter" class="cp-btn cp-btn-secondary">
+        Center on Player
+      </button>
+    </div>
+
+    <div class="cp-section">
+      <div class="cp-header">
+        <h2 class="cp-title">Game</h2>
+      </div>
+      <div class="cp-row">
+        <label for="movementModeSelect" class="cp-label">Movement mode</label>
+        <select id="movementModeSelect" class="cp-select">
+          <option value="buttons">Buttons</option>
+          <option value="geolocation">Geolocation</option>
+        </select>
+      </div>
+      <button id="btnNewGame" class="cp-btn cp-btn-danger">
+        New Game
+      </button>
+    </div>
+
+    <div id="winPanel" class="cp-section cp-win"></div>
+  </div>
+`;
 
 // const definitions
+const GRID_ANCHOR = leaflet.latLng(0, 0);
+
 const CLASSROOM_LATLNG = leaflet.latLng(
   36.997936938057016,
   -122.05703507501151,
@@ -34,7 +72,7 @@ const TILE_DEGREES = 1e-4;
 const INTERACT_RADIUS = 3;
 const GRID_MARGIN = 5;
 const TOKEN_SPAWN_PROBABILITY = 0.5;
-const TARGET_TOKEN_VALUE = 8;
+const TARGET_TOKEN_VALUE = 2048;
 
 // map and tiles
 const map = leaflet.map(mapDiv, {
@@ -80,42 +118,6 @@ function _updateInteractRing() {
     interactRing.setBounds(bounds);
   }
 }
-
-// ui buttons for movement + actual implementation
-controlPanelDiv.innerHTML = `
-  <div class="controls">
-    <button id="btnN">North</button>
-    <button id="btnS">South</button>
-    <button id="btnW">West</button>
-    <button id="btnE">East</button>
-    <button id="btnCenter">Center on Player</button>
-  </div>
-`;
-
-function movePlayer(di: number, dj: number) {
-  const pCell = latLngToCell(PLAYER_LATLNG);
-  const ni = pCell.i + di;
-  const nj = pCell.j + dj;
-  const center = cellCenterLatLng(ni, nj);
-  PLAYER_LATLNG = center;
-  playerMarker.setLatLng(PLAYER_LATLNG);
-  _updateInteractRing();
-
-  for (const c of cells.values()) _styleCell(c);
-
-  _updateHUD("Moved.");
-  _checkWinCondition();
-}
-(document.getElementById("btnN") as HTMLButtonElement).onclick = () =>
-  movePlayer(1, 0);
-(document.getElementById("btnS") as HTMLButtonElement).onclick = () =>
-  movePlayer(-1, 0);
-(document.getElementById("btnW") as HTMLButtonElement).onclick = () =>
-  movePlayer(0, -1);
-(document.getElementById("btnE") as HTMLButtonElement).onclick = () =>
-  movePlayer(0, 1);
-(document.getElementById("btnCenter") as HTMLButtonElement).onclick = () =>
-  map.panTo(PLAYER_LATLNG);
 
 // lat/lng to cell coords
 function latLngToCell(latlng: leaflet.LatLng) {
@@ -186,12 +188,12 @@ function restoreCellFromMemento(memento: CellMemento): CellState {
   return { tokenValue: memento.tokenValue };
 }
 
-// reates a base state for untouched cells
+// creates a base state for untouched cells
 function _baseCellState(i: number, j: number): CellState {
   return { tokenValue: _generateTokenValue(i, j) };
 }
 
-// eads token value for any cell
+// reads token value for any cell
 function getCellTokenValue(cell: cellData): number | null {
   const key = makeCellKey(cell.i, cell.j);
   const stored = cellStates.get(key);
@@ -216,23 +218,271 @@ function updateCellState(
   cellStates.set(key, memento);
 }
 
-// no token value gets stored
-function createCell(i: number, j: number) {
-  const bounds = _cellToBounds(i, j);
+// interaction constraints
+function _cellDistanceFromPlayer(cell: cellData): number {
+  const playerCell = latLngToCell(PLAYER_LATLNG);
+  const di = Math.abs(cell.i - playerCell.i);
+  const dj = Math.abs(cell.j - playerCell.j);
+  return Math.max(di, dj);
+}
 
-  const rect = leaflet.rectangle(bounds, {
-    weight: 1,
-    color: "#444",
-    fillOpacity: 0.2,
-  }).addTo(map);
+function _isInteractable(cell: cellData): boolean {
+  return _cellDistanceFromPlayer(cell) <= INTERACT_RADIUS;
+}
 
-  const data: cellData = { i, j, rect };
-  const key = makeCellKey(i, j);
-  cells.set(key, data);
+// inventory
+let heldToken: number | null = null;
 
-  _styleCell(data);
+function _updateHUD(message?: string) {
+  const base = heldToken === null
+    ? "Hands: (empty)"
+    : `Hands: holding token [${heldToken}]`;
+  statusPanelDiv.textContent = message ? `${base} | ${message}` : base;
+}
 
-  rect.on("click", () => handleCellClick(data));
+type MovementMode = "buttons" | "geolocation";
+
+interface MovementController {
+  readonly mode: MovementMode;
+  start(): void;
+  stop(): void;
+}
+
+interface SerializedCellState {
+  key: cellKey;
+  tokenValue: number | null;
+}
+
+interface GameState {
+  playerLat: number;
+  playerLng: number;
+  heldToken: number | null;
+  cellStates: SerializedCellState[];
+  movementMode: MovementMode;
+}
+
+const STORAGE_KEY = "globeGameState_v1";
+
+function getMovementModeFromQueryString(): MovementMode | null {
+  const params = new URLSearchParams(globalThis.location.search);
+  const mode = params.get("movement");
+  if (mode === "buttons" || mode === "geolocation") return mode;
+  return null;
+}
+
+const requestedModeFromQuery = getMovementModeFromQueryString();
+
+let currentMovementMode: MovementMode = requestedModeFromQuery ?? "buttons";
+
+let currentMovementController: MovementController | null = null;
+let buttonController: MovementController | null = null;
+let geoController: MovementController | null = null;
+
+function setPlayerLatLng(newLatLng: leaflet.LatLng, centerMap = false) {
+  PLAYER_LATLNG = newLatLng;
+  playerMarker.setLatLng(PLAYER_LATLNG);
+  _updateInteractRing();
+
+  for (const c of cells.values()) _styleCell(c);
+
+  if (centerMap) {
+    map.panTo(PLAYER_LATLNG);
+  }
+
+  _checkWinCondition();
+  saveGameState();
+}
+
+function movePlayerByCells(di: number, dj: number) {
+  const pCell = latLngToCell(PLAYER_LATLNG);
+  const ni = pCell.i + di;
+  const nj = pCell.j + dj;
+  const center = cellCenterLatLng(ni, nj);
+  setPlayerLatLng(center);
+  _updateHUD("Moved.");
+}
+
+class ButtonMovementController implements MovementController {
+  readonly mode: MovementMode = "buttons";
+
+  start() {
+    const btnN = document.getElementById("btnN") as HTMLButtonElement | null;
+    const btnS = document.getElementById("btnS") as HTMLButtonElement | null;
+    const btnW = document.getElementById("btnW") as HTMLButtonElement | null;
+    const btnE = document.getElementById("btnE") as HTMLButtonElement | null;
+    if (!btnN || !btnS || !btnW || !btnE) return;
+
+    btnN.onclick = () => movePlayerByCells(1, 0);
+    btnS.onclick = () => movePlayerByCells(-1, 0);
+    btnW.onclick = () => movePlayerByCells(0, -1);
+    btnE.onclick = () => movePlayerByCells(0, 1);
+  }
+
+  stop() {
+    const btnN = document.getElementById("btnN") as HTMLButtonElement | null;
+    const btnS = document.getElementById("btnS") as HTMLButtonElement | null;
+    const btnW = document.getElementById("btnW") as HTMLButtonElement | null;
+    const btnE = document.getElementById("btnE") as HTMLButtonElement | null;
+    if (btnN) btnN.onclick = null;
+    if (btnS) btnS.onclick = null;
+    if (btnW) btnW.onclick = null;
+    if (btnE) btnE.onclick = null;
+  }
+}
+
+class GeoMovementController implements MovementController {
+  readonly mode: MovementMode = "geolocation";
+  private watchId: number | null = null;
+
+  start() {
+    if (!("geolocation" in navigator)) {
+      _updateHUD(
+        "Geolocation not supported in this browser. Staying on buttons.",
+      );
+      return;
+    }
+
+    this.watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const newLatLng = leaflet.latLng(latitude, longitude);
+        setPlayerLatLng(newLatLng, true);
+        _updateHUD(
+          "Geolocation updated. Go walk if you wish to accomplish anything",
+        );
+      },
+      (err) => {
+        _updateHUD(
+          `Geolocation error: ${err.message} (game still playable with buttons).`,
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 1000,
+        timeout: 10000,
+      },
+    );
+  }
+
+  stop() {
+    if (this.watchId !== null && "geolocation" in navigator) {
+      navigator.geolocation.clearWatch(this.watchId);
+      this.watchId = null;
+    }
+  }
+}
+
+function saveGameState() {
+  try {
+    const serializedCells: SerializedCellState[] = [];
+    for (const [key, memento] of cellStates.entries()) {
+      serializedCells.push({ key, tokenValue: memento.tokenValue });
+    }
+
+    const state: GameState = {
+      playerLat: PLAYER_LATLNG.lat,
+      playerLng: PLAYER_LATLNG.lng,
+      heldToken,
+      cellStates: serializedCells,
+      movementMode: currentMovementMode,
+    };
+
+    globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (err) {
+    console.error("Failed to save game state", err);
+  }
+}
+
+function loadGameState() {
+  let restored = false;
+  try {
+    const raw = globalThis.localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as GameState;
+      PLAYER_LATLNG = leaflet.latLng(parsed.playerLat, parsed.playerLng);
+      playerMarker.setLatLng(PLAYER_LATLNG);
+      heldToken = parsed.heldToken;
+
+      cellStates.clear();
+      for (const entry of parsed.cellStates ?? []) {
+        const memento: CellMemento = createCellMemento({
+          tokenValue: entry.tokenValue,
+        });
+        cellStates.set(entry.key, memento);
+      }
+
+      if (
+        !requestedModeFromQuery &&
+        (parsed.movementMode === "buttons" ||
+          parsed.movementMode === "geolocation")
+      ) {
+        currentMovementMode = parsed.movementMode;
+      }
+
+      restored = true;
+    }
+  } catch (err) {
+    console.error("Failed to load game state", err);
+  }
+
+  computeGrid();
+  _updateInteractRing();
+
+  if (restored) {
+    _updateHUD("Game state loaded. Continue where you left off.");
+  } else {
+    _updateHUD(
+      "Hover cells to see values. Click nearby highlighted cells to interact.",
+    );
+  }
+
+  _checkWinCondition();
+}
+
+function applyMovementMode(mode: MovementMode) {
+  if (currentMovementController && currentMovementController.mode === mode) {
+    return;
+  }
+
+  if (currentMovementController) {
+    currentMovementController.stop();
+  }
+
+  currentMovementMode = mode;
+
+  if (mode === "buttons") {
+    if (!buttonController) buttonController = new ButtonMovementController();
+    currentMovementController = buttonController;
+  } else {
+    if (!geoController) geoController = new GeoMovementController();
+    currentMovementController = geoController;
+  }
+
+  currentMovementController.start();
+  saveGameState();
+}
+
+function startNewGame() {
+  try {
+    globalThis.localStorage.removeItem(STORAGE_KEY);
+  } catch (err) {
+    console.error("Failed to clear saved game state", err);
+  }
+
+  PLAYER_LATLNG = CLASSROOM_LATLNG;
+  playerMarker.setLatLng(PLAYER_LATLNG);
+
+  heldToken = null;
+  cellStates.clear();
+
+  computeGrid();
+  _updateInteractRing();
+  _updateHUD("New game started.");
+
+  if (currentMovementController) {
+    currentMovementController.stop();
+  }
+  applyMovementMode(currentMovementMode);
 }
 
 // now clears and rebuilds all cells in view
@@ -254,18 +504,6 @@ function computeGrid() {
   }
 
   _updateInteractRing();
-}
-
-// interaction constraints
-function _cellDistanceFromPlayer(cell: cellData): number {
-  const playerCell = latLngToCell(PLAYER_LATLNG);
-  const di = Math.abs(cell.i - playerCell.i);
-  const dj = Math.abs(cell.j - playerCell.j);
-  return Math.max(di, dj);
-}
-
-function _isInteractable(cell: cellData): boolean {
-  return _cellDistanceFromPlayer(cell) <= INTERACT_RADIUS;
 }
 
 // visual feedback for interactables and show token values
@@ -303,18 +541,24 @@ function _styleCell(cell: cellData) {
   }
 }
 
-// inventory
-let heldToken: number | null = null;
+// no token value gets stored
+function createCell(i: number, j: number) {
+  const bounds = _cellToBounds(i, j);
 
-function _updateHUD(message?: string) {
-  const base = heldToken === null
-    ? "Hands: (empty)"
-    : `Hands: holding token [${heldToken}]`;
-  statusPanelDiv.textContent = message ? `${base} | ${message}` : base;
+  const rect = leaflet.rectangle(bounds, {
+    weight: 1,
+    color: "#444",
+    fillOpacity: 0.2,
+  }).addTo(map);
+
+  const data: cellData = { i, j, rect };
+  const key = makeCellKey(i, j);
+  cells.set(key, data);
+
+  _styleCell(data);
+
+  rect.on("click", () => handleCellClick(data));
 }
-_updateHUD(
-  "Hover cells to see values. Click nearby highlighted cells to interact.",
-);
 
 // interaction updates model
 function handleCellClick(cell: cellData) {
@@ -333,6 +577,7 @@ function handleCellClick(cell: cellData) {
     });
     _styleCell(cell);
     _updateHUD(`Picked up token [${heldToken}].`);
+    saveGameState();
     return;
   }
 
@@ -345,6 +590,7 @@ function handleCellClick(cell: cellData) {
     _styleCell(cell);
     _updateHUD(`Crafted new token [${newValue}].`);
     _checkWinCondition();
+    saveGameState();
     return;
   }
 
@@ -365,36 +611,97 @@ function handleCellClick(cell: cellData) {
   _updateHUD("Nothing to do here.");
 }
 
+const winPanelDiv = document.getElementById("winPanel") as
+  | HTMLDivElement
+  | null;
+
+function _showWin(value: number) {
+  if (!winPanelDiv) return;
+  winPanelDiv.innerHTML = `
+    <div class="cp-win-inner">
+      <h2 class="cp-win-title">Congrats!</h2>
+      <p class="cp-win-text">
+        You're rich with a shiny new token worth: [${value}]!
+      </p>
+    </div>
+  `;
+}
+
 // win condition
 function _checkWinCondition() {
   if (heldToken !== null && heldToken >= TARGET_TOKEN_VALUE) {
-    controlPanelDiv.innerHTML =
-      `<div id="win"><h2>Congrats!</h2><p>You're rich with a shiny new token worth: [${heldToken}]!</p></div>`;
+    _showWin(heldToken);
     return;
   }
 
-  // check visible cells from model
   for (const cell of cells.values()) {
     const tokenValue = getCellTokenValue(cell);
     if (tokenValue !== null && tokenValue >= TARGET_TOKEN_VALUE) {
-      controlPanelDiv.innerHTML =
-        `<div id="win"><h2>Congrats!</h2><p>You're rich with a shiny new token worth: [${tokenValue}]!</p></div>`;
+      _showWin(tokenValue);
       return;
     }
   }
 
-  // check modified cell states off screen
   for (const memento of cellStates.values()) {
     if (
       memento.tokenValue !== null && memento.tokenValue >= TARGET_TOKEN_VALUE
     ) {
-      controlPanelDiv.innerHTML =
-        `<div id="win"><h2>Congrats!</h2><p>You're rich with a shiny new token worth: [${memento.tokenValue}]!</p></div>`;
+      _showWin(memento.tokenValue);
       return;
     }
   }
 }
 
+// shared UI controls
+const centerBtn = document.getElementById("btnCenter") as
+  | HTMLButtonElement
+  | null;
+if (centerBtn) {
+  centerBtn.onclick = () => map.panTo(PLAYER_LATLNG);
+}
+
+const movementSelect = document.getElementById("movementModeSelect") as
+  | HTMLSelectElement
+  | null;
+if (movementSelect) {
+  movementSelect.onchange = () => {
+    const value = movementSelect.value === "geolocation"
+      ? "geolocation"
+      : "buttons";
+    applyMovementMode(value);
+    _updateHUD(
+      value === "geolocation"
+        ? "Movement mode: Geolocation (Go walk outside)."
+        : "Movement mode: Buttons (Lazy mode).",
+    );
+  };
+}
+
+const btnNewGame = document.getElementById("btnNewGame") as
+  | HTMLButtonElement
+  | null;
+if (btnNewGame) {
+  btnNewGame.onclick = () => {
+    if (
+      globalThis.confirm(
+        "Start a new game? This will erase your current progress.",
+      )
+    ) {
+      startNewGame();
+    }
+  };
+}
+
+// map/grid initialization
 map.on("moveend", computeGrid);
-computeGrid();
-_updateInteractRing();
+
+loadGameState();
+
+const movementSelectInit = document.getElementById("movementModeSelect") as
+  | HTMLSelectElement
+  | null;
+if (movementSelectInit) {
+  movementSelectInit.value = currentMovementMode;
+}
+
+applyMovementMode(currentMovementMode);
